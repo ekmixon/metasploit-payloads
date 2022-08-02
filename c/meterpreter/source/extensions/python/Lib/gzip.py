@@ -100,10 +100,8 @@ class GzipFile(io.BufferedIOBase):
             else:
                 filename = ''
         if mode is None:
-            if hasattr(fileobj, 'mode'): mode = fileobj.mode
-            else: mode = 'rb'
-
-        if mode[0:1] == 'r':
+            mode = fileobj.mode if hasattr(fileobj, 'mode') else 'rb'
+        if mode[:1] == 'r':
             self.mode = READ
             # Set flag indicating start of a new member
             self._new_member = True
@@ -117,7 +115,7 @@ class GzipFile(io.BufferedIOBase):
             # Starts small, scales exponentially
             self.min_readsize = 100
 
-        elif mode[0:1] == 'w' or mode[0:1] == 'a':
+        elif mode[:1] in ['w', 'a']:
             self.mode = WRITE
             self._init_write(filename)
             self.compress = zlib.compressobj(compresslevel,
@@ -126,7 +124,7 @@ class GzipFile(io.BufferedIOBase):
                                              zlib.DEF_MEM_LEVEL,
                                              0)
         else:
-            raise IOError, "Mode " + mode + " not supported"
+            raise (IOError, f"Mode {mode} not supported")
 
         self.fileobj = fileobj
         self.offset = 0
@@ -140,12 +138,12 @@ class GzipFile(io.BufferedIOBase):
         import warnings
         warnings.warn("use the name attribute", DeprecationWarning, 2)
         if self.mode == WRITE and self.name[-3:] != ".gz":
-            return self.name + ".gz"
+            return f"{self.name}.gz"
         return self.name
 
     def __repr__(self):
         s = repr(self.fileobj)
-        return '<gzip ' + s[1:-1] + ' ' + hex(id(self)) + '>'
+        return f'<gzip {s[1:-1]} {hex(id(self))}>'
 
     def _check_closed(self):
         """Raises a ValueError if the underlying file object has been closed.
@@ -174,9 +172,7 @@ class GzipFile(io.BufferedIOBase):
                 fname = fname[:-3]
         except UnicodeEncodeError:
             fname = ''
-        flags = 0
-        if fname:
-            flags = FNAME
+        flags = FNAME if fname else 0
         self.fileobj.write(chr(flags))
         mtime = self.mtime
         if mtime is None:
@@ -431,7 +427,7 @@ class GzipFile(io.BufferedIOBase):
             if offset < self.offset:
                 raise IOError('Negative seek in write mode')
             count = offset - self.offset
-            for i in xrange(count // 1024):
+            for _ in xrange(count // 1024):
                 self.write(1024 * '\0')
             self.write((count % 1024) * '\0')
         elif self.mode == READ:
@@ -439,7 +435,7 @@ class GzipFile(io.BufferedIOBase):
                 # for negative seek, rewind and do positive seek
                 self.rewind()
             count = offset - self.offset
-            for i in xrange(count // 1024):
+            for _ in xrange(count // 1024):
                 self.read(1024)
             self.read(count % 1024)
 

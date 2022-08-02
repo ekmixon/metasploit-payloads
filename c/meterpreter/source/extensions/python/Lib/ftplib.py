@@ -162,10 +162,10 @@ class FTP:
 
     # Internal: "sanitize" a string for printing
     def sanitize(self, s):
-        if s[:5] == 'pass ' or s[:5] == 'PASS ':
+        if s[:5] in ['pass ', 'PASS ']:
             i = len(s)
             while i > 5 and s[i-1] in '\r\n':
-                i = i-1
+                i -= 1
             s = s[:5] + '*'*(i-5) + s[i:]
         return repr(s)
 
@@ -413,10 +413,10 @@ class FTP:
         self.voidcmd('TYPE I')
         conn = self.transfercmd(cmd, rest)
         while 1:
-            data = conn.recv(blocksize)
-            if not data:
+            if data := conn.recv(blocksize):
+                callback(data)
+            else:
                 break
-            callback(data)
         conn.close()
         return self.voidresp()
 
@@ -506,14 +506,14 @@ class FTP:
 
     def acct(self, password):
         '''Send new account name.'''
-        cmd = 'ACCT ' + password
+        cmd = f'ACCT {password}'
         return self.voidcmd(cmd)
 
     def nlst(self, *args):
         '''Return a list of files in a given directory (default the current).'''
         cmd = 'NLST'
         for arg in args:
-            cmd = cmd + (' ' + arg)
+            cmd = f'{cmd} {arg}'
         files = []
         self.retrlines(cmd, files.append)
         return files
@@ -530,7 +530,7 @@ class FTP:
             args, func = args[:-1], args[-1]
         for arg in args:
             if arg:
-                cmd = cmd + (' ' + arg)
+                cmd = f'{cmd} {arg}'
         self.retrlines(cmd, func)
 
     def rename(self, fromname, toname):
@@ -564,7 +564,7 @@ class FTP:
     def size(self, filename):
         '''Retrieve the size of a file.'''
         # The SIZE command is defined in RFC-3659
-        resp = self.sendcmd('SIZE ' + filename)
+        resp = self.sendcmd(f'SIZE {filename}')
         if resp[:3] == '213':
             s = resp[3:].strip()
             try:
@@ -574,12 +574,12 @@ class FTP:
 
     def mkd(self, dirname):
         '''Make a directory, return its full pathname.'''
-        resp = self.sendcmd('MKD ' + dirname)
+        resp = self.sendcmd(f'MKD {dirname}')
         return parse257(resp)
 
     def rmd(self, dirname):
         '''Remove a directory.'''
-        return self.voidcmd('RMD ' + dirname)
+        return self.voidcmd(f'RMD {dirname}')
 
     def pwd(self):
         '''Return current working directory.'''
@@ -718,10 +718,10 @@ else:
             conn = self.transfercmd(cmd, rest)
             try:
                 while 1:
-                    data = conn.recv(blocksize)
-                    if not data:
+                    if data := conn.recv(blocksize):
+                        callback(data)
+                    else:
                         break
-                    callback(data)
                 # shutdown ssl layer
                 if isinstance(conn, ssl.SSLSocket):
                     conn.unwrap()
@@ -894,7 +894,7 @@ def print_line(line):
 def ftpcp(source, sourcename, target, targetname = '', type = 'I'):
     '''Copy file from one FTP-instance to another.'''
     if not targetname: targetname = sourcename
-    type = 'TYPE ' + type
+    type = f'TYPE {type}'
     source.voidcmd(type)
     target.voidcmd(type)
     sourcehost, sourceport = parse227(source.sendcmd('PASV'))
@@ -902,9 +902,9 @@ def ftpcp(source, sourcename, target, targetname = '', type = 'I'):
     # RFC 959: the user must "listen" [...] BEFORE sending the
     # transfer request.
     # So: STOR before RETR, because here the target is a "user".
-    treply = target.sendcmd('STOR ' + targetname)
+    treply = target.sendcmd(f'STOR {targetname}')
     if treply[:3] not in ('125', '150'): raise error_proto  # RFC 959
-    sreply = source.sendcmd('RETR ' + sourcename)
+    sreply = source.sendcmd(f'RETR {sourcename}')
     if sreply[:3] not in ('125', '150'): raise error_proto  # RFC 959
     source.voidresp()
     target.voidresp()

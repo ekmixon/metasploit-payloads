@@ -173,9 +173,12 @@ class OrderedDict(dict):
             return '...'
         _repr_running[call_key] = 1
         try:
-            if not self:
-                return '%s()' % (self.__class__.__name__,)
-            return '%s(%r)' % (self.__class__.__name__, self.items())
+            return (
+                '%s(%r)' % (self.__class__.__name__, self.items())
+                if self
+                else f'{self.__class__.__name__}()'
+            )
+
         finally:
             del _repr_running[call_key]
 
@@ -605,7 +608,7 @@ class Counter(dict):
 
     def __repr__(self):
         if not self:
-            return '%s()' % self.__class__.__name__
+            return f'{self.__class__.__name__}()'
         items = ', '.join(map('%r: %r'.__mod__, self.most_common()))
         return '%s({%s})' % (self.__class__.__name__, items)
 

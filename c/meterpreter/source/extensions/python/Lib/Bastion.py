@@ -65,7 +65,7 @@ class BastionClass:
         some idea of what it is.
 
         """
-        return "<Bastion for %s>" % self._name_
+        return f"<Bastion for {self._name_}>"
 
     def __getattr__(self, name):
         """Get an as-yet undefined attribute value.

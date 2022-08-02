@@ -68,7 +68,7 @@ class MozillaCookieJar(FileCookieJar):
                     continue
 
                 domain, domain_specified, path, secure, expires, name, value = \
-                        line.split("\t")
+                            line.split("\t")
                 secure = (secure == "TRUE")
                 domain_specified = (domain_specified == "TRUE")
                 if name == "":
@@ -124,14 +124,9 @@ class MozillaCookieJar(FileCookieJar):
                     continue
                 if not ignore_expires and cookie.is_expired(now):
                     continue
-                if cookie.secure: secure = "TRUE"
-                else: secure = "FALSE"
-                if cookie.domain.startswith("."): initial_dot = "TRUE"
-                else: initial_dot = "FALSE"
-                if cookie.expires is not None:
-                    expires = str(cookie.expires)
-                else:
-                    expires = ""
+                secure = "TRUE" if cookie.secure else "FALSE"
+                initial_dot = "TRUE" if cookie.domain.startswith(".") else "FALSE"
+                expires = str(cookie.expires) if cookie.expires is not None else ""
                 if cookie.value is None:
                     # cookies.txt regards 'Set-Cookie: foo' as a cookie
                     # with no name, whereas cookielib regards it as a

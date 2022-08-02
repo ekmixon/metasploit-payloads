@@ -272,10 +272,7 @@ class TextCalendar(Calendar):
         """
         Returns a formatted day.
         """
-        if day == 0:
-            s = ''
-        else:
-            s = '%2i' % day             # right-align single-digit days
+        s = '' if day == 0 else '%2i' % day
         return s.center(width)
 
     def formatweek(self, theweek, width):
@@ -288,10 +285,7 @@ class TextCalendar(Calendar):
         """
         Returns a formatted week day name.
         """
-        if width >= 9:
-            names = day_name
-        else:
-            names = day_abbr
+        names = day_name if width >= 9 else day_abbr
         return names[day][:width].center(width)
 
     def formatweekheader(self, width):
@@ -395,7 +389,7 @@ class HTMLCalendar(Calendar):
         Return a complete week as a table row.
         """
         s = ''.join(self.formatday(d, wd) for (d, wd) in theweek)
-        return '<tr>%s</tr>' % s
+        return f'<tr>{s}</tr>'
 
     def formatweekday(self, day):
         """
@@ -408,16 +402,16 @@ class HTMLCalendar(Calendar):
         Return a header for a week as a table row.
         """
         s = ''.join(self.formatweekday(i) for i in self.iterweekdays())
-        return '<tr>%s</tr>' % s
+        return f'<tr>{s}</tr>'
 
     def formatmonthname(self, theyear, themonth, withyear=True):
         """
         Return a month name as a table row.
         """
         if withyear:
-            s = '%s %s' % (month_name[themonth], theyear)
+            s = f'{month_name[themonth]} {theyear}'
         else:
-            s = '%s' % month_name[themonth]
+            s = f'{month_name[themonth]}'
         return '<tr><th colspan="7" class="month">%s</th></tr>' % s
 
     def formatmonth(self, theyear, themonth, withyear=True):
@@ -514,10 +508,7 @@ class LocaleTextCalendar(TextCalendar):
 
     def formatweekday(self, day, width):
         with TimeEncoding(self.locale) as encoding:
-            if width >= 9:
-                names = day_name
-            else:
-                names = day_abbr
+            names = day_name if width >= 9 else day_abbr
             name = names[day]
             if encoding is not None:
                 name = name.decode(encoding)
@@ -559,7 +550,7 @@ class LocaleHTMLCalendar(HTMLCalendar):
             if encoding is not None:
                 s = s.decode(encoding)
             if withyear:
-                s = '%s %s' % (s, theyear)
+                s = f'{s} {theyear}'
             return '<tr><th colspan="7" class="month">%s</th></tr>' % s
 
 
@@ -613,8 +604,7 @@ def timegm(tuple):
     days = datetime.date(year, month, 1).toordinal() - _EPOCH_ORD + day - 1
     hours = days*24 + hour
     minutes = hours*60 + minute
-    seconds = minutes*60 + second
-    return seconds
+    return minutes*60 + second
 
 
 def main(args):

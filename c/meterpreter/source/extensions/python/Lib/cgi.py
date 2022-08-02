@@ -97,10 +97,7 @@ def initlog(*allargs):
             logfp = open(logfile, "a")
         except IOError:
             pass
-    if not logfp:
-        log = nolog
-    else:
-        log = dolog
+    log = dolog if logfp else nolog
     log(*allargs)
 
 def dolog(fmt, *args):
@@ -306,7 +303,7 @@ def parse_header(line):
     Return the main content-type and a dictionary of options.
 
     """
-    parts = _parseparam(';' + line)
+    parts = _parseparam(f';{line}')
     key = parts.next()
     pdict = {}
     for p in parts:
@@ -545,36 +542,32 @@ class FieldStorage:
 
     def getvalue(self, key, default=None):
         """Dictionary style get() method, including 'value' lookup."""
-        if key in self:
-            value = self[key]
-            if type(value) is type([]):
-                return map(attrgetter('value'), value)
-            else:
-                return value.value
-        else:
+        if key not in self:
             return default
+        value = self[key]
+        return (
+            map(attrgetter('value'), value)
+            if type(value) is type([])
+            else value.value
+        )
 
     def getfirst(self, key, default=None):
         """ Return the first value received."""
-        if key in self:
-            value = self[key]
-            if type(value) is type([]):
-                return value[0].value
-            else:
-                return value.value
-        else:
+        if key not in self:
             return default
+        value = self[key]
+        return value[0].value if type(value) is type([]) else value.value
 
     def getlist(self, key):
         """ Return list of received values."""
-        if key in self:
-            value = self[key]
-            if type(value) is type([]):
-                return map(attrgetter('value'), value)
-            else:
-                return [value.value]
-        else:
+        if key not in self:
             return []
+        value = self[key]
+        return (
+            map(attrgetter('value'), value)
+            if type(value) is type([])
+            else [value.value]
+        )
 
     def keys(self):
         """Dictionary style keys() method."""
@@ -605,11 +598,15 @@ class FieldStorage:
         """Internal: read data in query string format."""
         qs = self.fp.read(self.length)
         if self.qs_on_post:
-            qs += '&' + self.qs_on_post
+            qs += f'&{self.qs_on_post}'
         self.list = list = []
-        for key, value in urlparse.parse_qsl(qs, self.keep_blank_values,
-                                            self.strict_parsing):
-            list.append(MiniFieldStorage(key, value))
+        list.extend(
+            MiniFieldStorage(key, value)
+            for key, value in urlparse.parse_qsl(
+                qs, self.keep_blank_values, self.strict_parsing
+            )
+        )
+
         self.skip_lines()
 
     FieldStorageClass = None
@@ -670,11 +667,10 @@ class FieldStorage:
             self.read_lines_to_eof()
 
     def __write(self, line):
-        if self.__file is not None:
-            if self.__file.tell() + len(line) > 1000:
-                self.file = self.make_file('')
-                self.file.write(self.__file.getvalue())
-                self.__file = None
+        if self.__file is not None and self.__file.tell() + len(line) > 1000:
+            self.file = self.make_file('')
+            self.file.write(self.__file.getvalue())
+            self.__file = None
         self.file.write(line)
 
     def read_lines_to_eof(self):
@@ -688,8 +684,8 @@ class FieldStorage:
 
     def read_lines_to_outerboundary(self):
         """Internal: read lines until outerboundary."""
-        next = "--" + self.outerboundary
-        last = next + "--"
+        next = f"--{self.outerboundary}"
+        last = f"{next}--"
         delim = ""
         last_line_lfend = True
         while 1:
@@ -731,8 +727,8 @@ class FieldStorage:
         """Internal: skip lines until outer boundary if defined."""
         if not self.outerboundary or self.done:
             return
-        next = "--" + self.outerboundary
-        last = next + "--"
+        next = f"--{self.outerboundary}"
+        last = f"{next}--"
         last_line_lfend = True
         while 1:
             line = self.fp.readline(1<<16)
@@ -865,22 +861,17 @@ class InterpFormContentDict(SvFormContentDict):
 class FormContent(FormContentDict):
     """This class is present for backwards compatibility only."""
     def values(self, key):
-        if key in self.dict :return self.dict[key]
-        else: return None
+        return self.dict[key] if key in self.dict else None
     def indexed_value(self, key, location):
         if key in self.dict:
-            if len(self.dict[key]) > location:
-                return self.dict[key][location]
-            else: return None
+            return self.dict[key][location] if len(self.dict[key]) > location else None
         else: return None
     def value(self, key):
-        if key in self.dict: return self.dict[key][0]
-        else: return None
+        return self.dict[key][0] if key in self.dict else None
     def length(self, key):
         return len(self.dict[key])
     def stripped(self, key):
-        if key in self.dict: return self.dict[key][0].strip()
-        else: return None
+        return self.dict[key][0].strip() if key in self.dict else None
     def pars(self):
         return self.dict
 

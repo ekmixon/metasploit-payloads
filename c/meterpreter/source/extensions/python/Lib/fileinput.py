@@ -200,10 +200,7 @@ class FileInput:
         else:
             if files is None:
                 files = sys.argv[1:]
-            if not files:
-                files = ('-',)
-            else:
-                files = tuple(files)
+            files = tuple(files) if files else ('-', )
         self._files = files
         self._inplace = inplace
         self._backup = backup
@@ -251,10 +248,10 @@ class FileInput:
             self._lineno += 1
             self._filelineno += 1
             return line
-        line = self.readline()
-        if not line:
+        if line := self.readline():
+            return line
+        else:
             raise StopIteration
-        return line
 
     def __getitem__(self, i):
         if i != self._lineno:
@@ -265,13 +262,12 @@ class FileInput:
             raise IndexError, "end of input reached"
 
     def nextfile(self):
-        savestdout = self._savestdout
-        self._savestdout = 0
-        if savestdout:
+        if savestdout := self._savestdout:
             sys.stdout = savestdout
 
         output = self._output
         self._output = 0
+        self._savestdout = 0
         try:
             if output:
                 output.close()
@@ -315,37 +311,37 @@ class FileInput:
                 self._filename = '<stdin>'
                 self._file = sys.stdin
                 self._isstdin = True
-            else:
-                if self._inplace:
-                    self._backupfilename = (
-                        self._filename + (self._backup or os.extsep+"bak"))
-                    try: os.unlink(self._backupfilename)
-                    except os.error: pass
-                    # The next few lines may raise IOError
-                    os.rename(self._filename, self._backupfilename)
-                    self._file = open(self._backupfilename, self._mode)
-                    try:
-                        perm = os.fstat(self._file.fileno()).st_mode
-                    except OSError:
-                        self._output = open(self._filename, "w")
-                    else:
-                        fd = os.open(self._filename,
-                                     os.O_CREAT | os.O_WRONLY | os.O_TRUNC,
-                                     perm)
-                        self._output = os.fdopen(fd, "w")
-                        try:
-                            if hasattr(os, 'chmod'):
-                                os.chmod(self._filename, perm)
-                        except OSError:
-                            pass
-                    self._savestdout = sys.stdout
-                    sys.stdout = self._output
+            elif self._inplace:
+                self._backupfilename = (self._filename + (self._backup or f"{os.extsep}bak"))
+                try: os.unlink(self._backupfilename)
+                except os.error: pass
+                # The next few lines may raise IOError
+                os.rename(self._filename, self._backupfilename)
+                self._file = open(self._backupfilename, self._mode)
+                try:
+                    perm = os.fstat(self._file.fileno()).st_mode
+                except OSError:
+                    self._output = open(self._filename, "w")
                 else:
+                    fd = os.open(self._filename,
+                                 os.O_CREAT | os.O_WRONLY | os.O_TRUNC,
+                                 perm)
+                    self._output = os.fdopen(fd, "w")
+                    try:
+                        if hasattr(os, 'chmod'):
+                            os.chmod(self._filename, perm)
+                    except OSError:
+                        pass
+                self._savestdout = sys.stdout
+                sys.stdout = self._output
+            else:
                     # This may raise IOError
-                    if self._openhook:
-                        self._file = self._openhook(self._filename, self._mode)
-                    else:
-                        self._file = open(self._filename, self._mode)
+                self._file = (
+                    self._openhook(self._filename, self._mode)
+                    if self._openhook
+                    else open(self._filename, self._mode)
+                )
+
         self._buffer = self._file.readlines(self._bufsize)
         self._bufindex = 0
         if not self._buffer:
@@ -363,12 +359,11 @@ class FileInput:
         return self._filelineno
 
     def fileno(self):
-        if self._file:
-            try:
-                return self._file.fileno()
-            except ValueError:
-                return -1
-        else:
+        if not self._file:
+            return -1
+        try:
+            return self._file.fileno()
+        except ValueError:
             return -1
 
     def isfirstline(self):

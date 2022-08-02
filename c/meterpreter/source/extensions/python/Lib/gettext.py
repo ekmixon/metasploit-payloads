@@ -68,10 +68,7 @@ def test(condition, true, false):
 
     Required to correctly interpret plural forms.
     """
-    if condition:
-        return true
-    else:
-        return false
+    return true if condition else false
 
 
 def c2py(plural):
@@ -191,43 +188,28 @@ class NullTranslations:
             self._fallback = fallback
 
     def gettext(self, message):
-        if self._fallback:
-            return self._fallback.gettext(message)
-        return message
+        return self._fallback.gettext(message) if self._fallback else message
 
     def lgettext(self, message):
-        if self._fallback:
-            return self._fallback.lgettext(message)
-        return message
+        return self._fallback.lgettext(message) if self._fallback else message
 
     def ngettext(self, msgid1, msgid2, n):
         if self._fallback:
             return self._fallback.ngettext(msgid1, msgid2, n)
-        if n == 1:
-            return msgid1
-        else:
-            return msgid2
+        return msgid1 if n == 1 else msgid2
 
     def lngettext(self, msgid1, msgid2, n):
         if self._fallback:
             return self._fallback.lngettext(msgid1, msgid2, n)
-        if n == 1:
-            return msgid1
-        else:
-            return msgid2
+        return msgid1 if n == 1 else msgid2
 
     def ugettext(self, message):
-        if self._fallback:
-            return self._fallback.ugettext(message)
-        return unicode(message)
+        return self._fallback.ugettext(message) if self._fallback else unicode(message)
 
     def ungettext(self, msgid1, msgid2, n):
         if self._fallback:
             return self._fallback.ungettext(msgid1, msgid2, n)
-        if n == 1:
-            return unicode(msgid1)
-        else:
-            return unicode(msgid2)
+        return unicode(msgid1) if n == 1 else unicode(msgid2)
 
     def info(self):
         return self._info
@@ -288,11 +270,10 @@ class GNUTranslations(NullTranslations):
             mend = moff + mlen
             tlen, toff = unpack(ii, buf[transidx:transidx+8])
             tend = toff + tlen
-            if mend < buflen and tend < buflen:
-                msg = buf[moff:mend]
-                tmsg = buf[toff:tend]
-            else:
+            if mend >= buflen or tend >= buflen:
                 raise IOError(0, 'File is corrupt', filename)
+            msg = buf[moff:mend]
+            tmsg = buf[toff:tend]
             # See if we're looking at GNU .mo conventions for metadata
             if mlen == 0:
                 # Catalog description
@@ -347,9 +328,7 @@ class GNUTranslations(NullTranslations):
         missing = object()
         tmsg = self._catalog.get(message, missing)
         if tmsg is missing:
-            if self._fallback:
-                return self._fallback.gettext(message)
-            return message
+            return self._fallback.gettext(message) if self._fallback else message
         # Encode the Unicode tmsg back to an 8-bit string, if possible
         if self._output_charset:
             return tmsg.encode(self._output_charset)
@@ -361,9 +340,7 @@ class GNUTranslations(NullTranslations):
         missing = object()
         tmsg = self._catalog.get(message, missing)
         if tmsg is missing:
-            if self._fallback:
-                return self._fallback.lgettext(message)
-            return message
+            return self._fallback.lgettext(message) if self._fallback else message
         if self._output_charset:
             return tmsg.encode(self._output_charset)
         return tmsg.encode(locale.getpreferredencoding())
@@ -379,10 +356,7 @@ class GNUTranslations(NullTranslations):
         except KeyError:
             if self._fallback:
                 return self._fallback.ngettext(msgid1, msgid2, n)
-            if n == 1:
-                return msgid1
-            else:
-                return msgid2
+            return msgid1 if n == 1 else msgid2
 
     def lngettext(self, msgid1, msgid2, n):
         try:
@@ -393,18 +367,13 @@ class GNUTranslations(NullTranslations):
         except KeyError:
             if self._fallback:
                 return self._fallback.lngettext(msgid1, msgid2, n)
-            if n == 1:
-                return msgid1
-            else:
-                return msgid2
+            return msgid1 if n == 1 else msgid2
 
     def ugettext(self, message):
         missing = object()
         tmsg = self._catalog.get(message, missing)
         if tmsg is missing:
-            if self._fallback:
-                return self._fallback.ugettext(message)
-            return unicode(message)
+            return self._fallback.ugettext(message) if self._fallback else unicode(message)
         return tmsg
 
     def ungettext(self, msgid1, msgid2, n):
@@ -413,10 +382,7 @@ class GNUTranslations(NullTranslations):
         except KeyError:
             if self._fallback:
                 return self._fallback.ungettext(msgid1, msgid2, n)
-            if n == 1:
-                tmsg = unicode(msgid1)
-            else:
-                tmsg = unicode(msgid2)
+            tmsg = unicode(msgid1) if n == 1 else unicode(msgid2)
         return tmsg
 
 
@@ -428,8 +394,7 @@ def find(domain, localedir=None, languages=None, all=0):
     if languages is None:
         languages = []
         for envar in ('LANGUAGE', 'LC_ALL', 'LC_MESSAGES', 'LANG'):
-            val = os.environ.get(envar)
-            if val:
+            if val := os.environ.get(envar):
                 languages = val.split(':')
                 break
         if 'C' not in languages:
@@ -441,14 +406,11 @@ def find(domain, localedir=None, languages=None, all=0):
             if nelang not in nelangs:
                 nelangs.append(nelang)
     # select a language
-    if all:
-        result = []
-    else:
-        result = None
+    result = [] if all else None
     for lang in nelangs:
         if lang == 'C':
             break
-        mofile = os.path.join(localedir, lang, 'LC_MESSAGES', '%s.mo' % domain)
+        mofile = os.path.join(localedir, lang, 'LC_MESSAGES', f'{domain}.mo')
         if os.path.exists(mofile):
             if all:
                 result.append(mofile)
@@ -548,10 +510,7 @@ def dngettext(domain, msgid1, msgid2, n):
         t = translation(domain, _localedirs.get(domain, None),
                         codeset=_localecodesets.get(domain))
     except IOError:
-        if n == 1:
-            return msgid1
-        else:
-            return msgid2
+        return msgid1 if n == 1 else msgid2
     return t.ngettext(msgid1, msgid2, n)
 
 def ldngettext(domain, msgid1, msgid2, n):
@@ -559,10 +518,7 @@ def ldngettext(domain, msgid1, msgid2, n):
         t = translation(domain, _localedirs.get(domain, None),
                         codeset=_localecodesets.get(domain))
     except IOError:
-        if n == 1:
-            return msgid1
-        else:
-            return msgid2
+        return msgid1 if n == 1 else msgid2
     return t.lngettext(msgid1, msgid2, n)
 
 def gettext(message):

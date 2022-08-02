@@ -210,12 +210,13 @@ def _load_testfile(filename, package, module_relative):
     if module_relative:
         package = _normalize_module(package, 3)
         filename = _module_relative_path(package, filename)
-        if hasattr(package, '__loader__'):
-            if hasattr(package.__loader__, 'get_data'):
-                file_contents = package.__loader__.get_data(filename)
-                # get_data() opens files as 'rb', so one must do the equivalent
-                # conversion as universal newlines would do.
-                return file_contents.replace(os.linesep, '\n'), filename
+        if hasattr(package, '__loader__') and hasattr(
+            package.__loader__, 'get_data'
+        ):
+            file_contents = package.__loader__.get_data(filename)
+            # get_data() opens files as 'rb', so one must do the equivalent
+            # conversion as universal newlines would do.
+            return file_contents.replace(os.linesep, '\n'), filename
     with open(filename, 'U') as f:
         return f.read(), filename
 
@@ -284,21 +285,17 @@ def _ellipsis_match(want, got):
 
     # Deal with exact matches possibly needed at one or both ends.
     startpos, endpos = 0, len(got)
-    w = ws[0]
-    if w:   # starts with exact match
-        if got.startswith(w):
-            startpos = len(w)
-            del ws[0]
-        else:
+    if w := ws[0]:
+        if not got.startswith(w):
             return False
-    w = ws[-1]
-    if w:   # ends with exact match
-        if got.endswith(w):
-            endpos -= len(w)
-            del ws[-1]
-        else:
+        startpos = len(w)
+        del ws[0]
+    if w := ws[-1]:
+        if not got.endswith(w):
             return False
 
+        endpos -= len(w)
+        del ws[-1]
     if startpos > endpos:
         # Exact end matches required more characters than we have, as in
         # _ellipsis_match('aa...aa', 'aaa')
@@ -320,11 +317,7 @@ def _ellipsis_match(want, got):
 
 def _comment_line(line):
     "Return a commented form of the given line"
-    line = line.rstrip()
-    if line:
-        return '# '+line
-    else:
-        return '#'
+    return f'# {line}' if (line := line.rstrip()) else '#'
 
 def _strip_exception_details(msg):
     # Support for IGNORE_EXCEPTION_DETAIL.
@@ -482,11 +475,11 @@ class Example:
             return NotImplemented
 
         return self.source == other.source and \
-               self.want == other.want and \
-               self.lineno == other.lineno and \
-               self.indent == other.indent and \
-               self.options == other.options and \
-               self.exc_msg == other.exc_msg
+                   self.want == other.want and \
+                   self.lineno == other.lineno and \
+                   self.indent == other.indent and \
+                   self.options == other.options and \
+                   self.exc_msg == other.exc_msg
 
     def __ne__(self, other):
         return not self == other
@@ -541,19 +534,18 @@ class DocTest:
             examples = '1 example'
         else:
             examples = '%d examples' % len(self.examples)
-        return ('<DocTest %s from %s:%s (%s)>' %
-                (self.name, self.filename, self.lineno, examples))
+        return f'<DocTest {self.name} from {self.filename}:{self.lineno} ({examples})>'
 
     def __eq__(self, other):
         if type(self) is not type(other):
             return NotImplemented
 
         return self.examples == other.examples and \
-               self.docstring == other.docstring and \
-               self.globs == other.globs and \
-               self.name == other.name and \
-               self.filename == other.filename and \
-               self.lineno == other.lineno
+                   self.docstring == other.docstring and \
+                   self.globs == other.globs and \
+                   self.name == other.name and \
+                   self.filename == other.filename and \
+                   self.lineno == other.lineno
 
     def __ne__(self, other):
         return not self == other
@@ -563,10 +555,14 @@ class DocTest:
 
     # This lets us sort tests by name:
     def __cmp__(self, other):
-        if not isinstance(other, DocTest):
-            return -1
-        return cmp((self.name, self.filename, self.lineno, id(self)),
-                   (other.name, other.filename, other.lineno, id(other)))
+        return (
+            cmp(
+                (self.name, self.filename, self.lineno, id(self)),
+                (other.name, other.filename, other.lineno, id(other)),
+            )
+            if isinstance(other, DocTest)
+            else -1
+        )
 
 ######################################################################
 ## 3. DocTestParser
@@ -644,7 +640,7 @@ class DocTestParser:
             lineno += string.count('\n', charno, m.start())
             # Extract info from the regexp match.
             (source, options, want, exc_msg) = \
-                     self._parse_example(m, name, lineno)
+                         self._parse_example(m, name, lineno)
             # Create an Example, and add it to the list.
             if not self._IS_BLANK_OR_COMMENT(source):
                 output.append( Example(source, want, exc_msg,
@@ -717,13 +713,7 @@ class DocTestParser:
                            lineno + len(source_lines))
         want = '\n'.join([wl[indent:] for wl in want_lines])
 
-        # If `want` contains a traceback message, then extract it.
-        m = self._EXCEPTION_RE.match(want)
-        if m:
-            exc_msg = m.group('msg')
-        else:
-            exc_msg = None
-
+        exc_msg = m.group('msg') if (m := self._EXCEPTION_RE.match(want)) else None
         # Extract options from the source.
         options = self._find_options(source, name, lineno)
 
@@ -772,10 +762,7 @@ class DocTestParser:
     def _min_indent(self, s):
         "Return the minimum indentation of any non-blank line in `s`"
         indents = [len(indent) for indent in self._INDENT_RE.findall(s)]
-        if len(indents) > 0:
-            return min(indents)
-        else:
-            return 0
+        return min(indents, default=0)
 
     def _check_prompt_blank(self, lines, indent, name, lineno):
         """
@@ -876,10 +863,10 @@ class DocTestFinder:
         # If name was not specified, then extract it from the object.
         if name is None:
             name = getattr(obj, '__name__', None)
-            if name is None:
-                raise ValueError("DocTestFinder.find: name must be given "
-                        "when obj.__name__ doesn't exist: %r" %
-                                 (type(obj),))
+        if name is None:
+            raise ValueError("DocTestFinder.find: name must be given "
+                    "when obj.__name__ doesn't exist: %r" %
+                             (type(obj),))
 
         # Find the module that contains the given object (if obj is
         # a module, then module=obj.).  Note: this may fail, in which
@@ -910,10 +897,7 @@ class DocTestFinder:
 
         # Initialize globals, and merge in extraglobs.
         if globs is None:
-            if module is None:
-                globs = {}
-            else:
-                globs = module.__dict__.copy()
+            globs = {} if module is None else module.__dict__.copy()
         else:
             globs = globs.copy()
         if extraglobs is not None:
@@ -1244,7 +1228,7 @@ class DocTestRunner:
             out.append('File "%s", line %s, in %s' %
                        (test.filename, lineno, test.name))
         else:
-            out.append('Line %s, in %s' % (example.lineno+1, test.name))
+            out.append(f'Line {example.lineno + 1}, in {test.name}')
         out.append('Failed example:')
         source = example.source
         out.append(_indent(source))
@@ -1392,14 +1376,13 @@ class DocTestRunner:
                                          r'\[(?P<examplenum>\d+)\]>$')
     def __patched_linecache_getlines(self, filename, module_globals=None):
         m = self.__LINECACHE_FILENAME_RE.match(filename)
-        if m and m.group('name') == self.test.name:
-            example = self.test.examples[int(m.group('examplenum'))]
-            source = example.source
-            if isinstance(source, unicode):
-                source = source.encode('ascii', 'backslashreplace')
-            return source.splitlines(True)
-        else:
+        if not m or m.group('name') != self.test.name:
             return self.save_linecache_getlines(filename, module_globals)
+        example = self.test.examples[int(m.group('examplenum'))]
+        source = example.source
+        if isinstance(source, unicode):
+            source = source.encode('ascii', 'backslashreplace')
+        return source.splitlines(True)
 
     def run(self, test, compileflags=None, out=None, clear_globs=True):
         """
@@ -1587,12 +1570,7 @@ class OutputChecker:
 
         # The ELLIPSIS flag says to let the sequence "..." in `want`
         # match any substring in `got`.
-        if optionflags & ELLIPSIS:
-            if _ellipsis_match(want, got):
-                return True
-
-        # We didn't find any match; return false.
-        return False
+        return bool(optionflags & ELLIPSIS and _ellipsis_match(want, got))
 
     # Should we do a fancy diff?
     def _do_a_fancy_diff(self, want, got, optionflags):
@@ -2014,10 +1992,7 @@ def testfile(filename, module_relative=True, name=None, package=None,
         name = os.path.basename(filename)
 
     # Assemble the globals.
-    if globs is None:
-        globs = {}
-    else:
-        globs = globs.copy()
+    globs = {} if globs is None else globs.copy()
     if extraglobs is not None:
         globs.update(extraglobs)
     if '__name__' not in globs:
@@ -2188,9 +2163,9 @@ class DocTestCase(unittest.TestCase):
         self._dt_tearDown = tearDown
 
     def setUp(self):
-        test = self._dt_test
-
         if self._dt_setUp is not None:
+            test = self._dt_test
+
             self._dt_setUp(test)
 
     def tearDown(self):
@@ -2227,10 +2202,7 @@ class DocTestCase(unittest.TestCase):
 
     def format_failure(self, err):
         test = self._dt_test
-        if test.lineno is None:
-            lineno = 'unknown line number'
-        else:
-            lineno = '%s' % test.lineno
+        lineno = 'unknown line number' if test.lineno is None else f'{test.lineno}'
         lname = '.'.join(test.name.split('.')[-1:])
         return ('Failed doctest test for %s\n'
                 '  File "%s", line %s, in %s\n\n%s'
@@ -2317,10 +2289,10 @@ class DocTestCase(unittest.TestCase):
             return NotImplemented
 
         return self._dt_test == other._dt_test and \
-               self._dt_optionflags == other._dt_optionflags and \
-               self._dt_setUp == other._dt_setUp and \
-               self._dt_tearDown == other._dt_tearDown and \
-               self._dt_checker == other._dt_checker
+                   self._dt_optionflags == other._dt_optionflags and \
+                   self._dt_setUp == other._dt_setUp and \
+                   self._dt_tearDown == other._dt_tearDown and \
+                   self._dt_checker == other._dt_checker
 
     def __ne__(self, other):
         return not self == other
@@ -2331,12 +2303,12 @@ class DocTestCase(unittest.TestCase):
 
     def __repr__(self):
         name = self._dt_test.name.split('.')
-        return "%s (%s)" % (name[-1], '.'.join(name[:-1]))
+        return f"{name[-1]} ({'.'.join(name[:-1])})"
 
     __str__ = __repr__
 
     def shortDescription(self):
-        return "Doctest: " + self._dt_test.name
+        return f"Doctest: {self._dt_test.name}"
 
 class SkipDocTestCase(DocTestCase):
     def __init__(self, module):
@@ -2350,7 +2322,7 @@ class SkipDocTestCase(DocTestCase):
         pass
 
     def shortDescription(self):
-        return "Skipping tests from %s" % self.module.__name__
+        return f"Skipping tests from {self.module.__name__}"
 
     __str__ = shortDescription
 
@@ -2398,21 +2370,21 @@ def DocTestSuite(module=None, globs=None, extraglobs=None, test_finder=None,
     module = _normalize_module(module)
     tests = test_finder.find(module, globs=globs, extraglobs=extraglobs)
 
-    if not tests and sys.flags.optimize >=2:
+    if not tests:
+        if sys.flags.optimize < 2:
+            # Why do we want to do this? Because it reveals a bug that might
+            # otherwise be hidden.
+            # It is probably a bug that this exception is not also raised if the
+            # number of doctest examples in tests is zero (i.e. if no doctest
+            # examples were found).  However, we should probably not be raising
+            # an exception at all here, though it is too late to make this change
+            # for a maintenance release.  See also issue #14649.
+            raise ValueError(module, "has no docstrings")
+
         # Skip doctests when running with -O2
         suite = unittest.TestSuite()
         suite.addTest(SkipDocTestCase(module))
         return suite
-    elif not tests:
-        # Why do we want to do this? Because it reveals a bug that might
-        # otherwise be hidden.
-        # It is probably a bug that this exception is not also raised if the
-        # number of doctest examples in tests is zero (i.e. if no doctest
-        # examples were found).  However, we should probably not be raising
-        # an exception at all here, though it is too late to make this change
-        # for a maintenance release.  See also issue #14649.
-        raise ValueError(module, "has no docstrings")
-
     tests.sort()
     suite = unittest.TestSuite()
 
@@ -2445,11 +2417,7 @@ class DocFileCase(DocTestCase):
 def DocFileTest(path, module_relative=True, package=None,
                 globs=None, parser=DocTestParser(),
                 encoding=None, **options):
-    if globs is None:
-        globs = {}
-    else:
-        globs = globs.copy()
-
+    globs = {} if globs is None else globs.copy()
     if package and not module_relative:
         raise ValueError("Package may only be specified for module-"
                          "relative paths.")
@@ -2607,11 +2575,9 @@ def script_from_examples(s):
         if isinstance(piece, Example):
             # Add the example's source code (strip trailing NL)
             output.append(piece.source[:-1])
-            # Add the expected output:
-            want = piece.want
-            if want:
+            if want := piece.want:
                 output.append('# Expected:')
-                output += ['## '+l for l in want.split('\n')[:-1]]
+                output += [f'## {l}' for l in want.split('\n')[:-1]]
         else:
             # Add non-example text.
             output += [_comment_line(l)
@@ -2639,8 +2605,7 @@ def testsource(module, name):
     if not test:
         raise ValueError(name, "not found in tests")
     test = test[0]
-    testsrc = script_from_examples(test.docstring)
-    return testsrc
+    return script_from_examples(test.docstring)
 
 def debug_src(src, pm=False, globs=None):
     """Debug a single doctest docstring, in argument `src`'"""

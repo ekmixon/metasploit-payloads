@@ -218,10 +218,8 @@ def open(file, mode="r", buffering=-1,
             buffer = BufferedRandom(raw, buffering)
         elif writing or appending:
             buffer = BufferedWriter(raw, buffering)
-        elif reading:
-            buffer = BufferedReader(raw, buffering)
         else:
-            raise ValueError("unknown mode: %r" % mode)
+            buffer = BufferedReader(raw, buffering)
         result = buffer
         if binary:
             return result
@@ -298,8 +296,7 @@ class IOBase:
 
     def _unsupported(self, name):
         """Internal: raise an exception for unsupported operations."""
-        raise UnsupportedOperation("%s.%s() not supported" %
-                                   (self.__class__.__name__, name))
+        raise UnsupportedOperation(f"{self.__class__.__name__}.{name}() not supported")
 
     ### Positioning ###
 
@@ -499,10 +496,10 @@ class IOBase:
         return self
 
     def next(self):
-        line = self.readline()
-        if not line:
+        if line := self.readline():
+            return line
+        else:
             raise StopIteration
-        return line
 
     def readlines(self, hint=None):
         """Return a list of lines from the stream.
@@ -571,11 +568,7 @@ class RawIOBase(IOBase):
             if not data:
                 break
             res += data
-        if res:
-            return bytes(res)
-        else:
-            # b'' or None
-            return data
+        return bytes(res) if res else data
 
     def readinto(self, b):
         """Read up to len(b) bytes into b.
@@ -1404,7 +1397,7 @@ class IncrementalNewlineDecoder(codecs.IncrementalDecoder):
         cr = output.count('\r') - crlf
         lf = output.count('\n') - crlf
         self.seennl |= (lf and self._LF) | (cr and self._CR) \
-                    | (crlf and self._CRLF)
+                        | (crlf and self._CRLF)
 
         if self.translate:
             if crlf:
@@ -1505,9 +1498,8 @@ class TextIOWrapper(TextIOBase):
 
         if errors is None:
             errors = "strict"
-        else:
-            if not isinstance(errors, basestring):
-                raise ValueError("invalid errors: %r" % errors)
+        elif not isinstance(errors, basestring):
+            raise ValueError("invalid errors: %r" % errors)
 
         self._buffer = buffer
         self._line_buffering = line_buffering
@@ -1821,7 +1813,7 @@ class TextIOWrapper(TextIOBase):
         # The strategy of seek() is to go back to the safe start point
         # and replay the effect of read(chars_to_skip) from there.
         start_pos, dec_flags, bytes_to_feed, need_eof, chars_to_skip = \
-            self._unpack_cookie(cookie)
+                self._unpack_cookie(cookie)
 
         # Seek back to the safe start point.
         self.buffer.seek(start_pos)
@@ -1876,7 +1868,6 @@ class TextIOWrapper(TextIOBase):
                       decoder.decode(self.buffer.read(), final=True))
             self._set_decoded_chars('')
             self._snapshot = None
-            return result
         else:
             # Keep reading chunks until we have n characters to return.
             eof = False
@@ -1884,7 +1875,8 @@ class TextIOWrapper(TextIOBase):
             while len(result) < n and not eof:
                 eof = not self._read_chunk()
                 result += self._get_decoded_chars(n - len(result))
-            return result
+
+        return result
 
     def next(self):
         self._telling = False

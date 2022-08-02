@@ -62,10 +62,7 @@ class Iterable:
 
     @classmethod
     def __subclasshook__(cls, C):
-        if cls is Iterable:
-            if _hasattr(C, "__iter__"):
-                return True
-        return NotImplemented
+        return True if cls is Iterable and _hasattr(C, "__iter__") else NotImplemented
 
 Iterable.register(str)
 
@@ -82,9 +79,8 @@ class Iterator(Iterable):
 
     @classmethod
     def __subclasshook__(cls, C):
-        if cls is Iterator:
-            if _hasattr(C, "next") and _hasattr(C, "__iter__"):
-                return True
+        if cls is Iterator and _hasattr(C, "next") and _hasattr(C, "__iter__"):
+            return True
         return NotImplemented
 
 
@@ -97,10 +93,7 @@ class Sized:
 
     @classmethod
     def __subclasshook__(cls, C):
-        if cls is Sized:
-            if _hasattr(C, "__len__"):
-                return True
-        return NotImplemented
+        return True if cls is Sized and _hasattr(C, "__len__") else NotImplemented
 
 
 class Container:
@@ -112,9 +105,8 @@ class Container:
 
     @classmethod
     def __subclasshook__(cls, C):
-        if cls is Container:
-            if _hasattr(C, "__contains__"):
-                return True
+        if cls is Container and _hasattr(C, "__contains__"):
+            return True
         return NotImplemented
 
 
@@ -127,10 +119,7 @@ class Callable:
 
     @classmethod
     def __subclasshook__(cls, C):
-        if cls is Callable:
-            if _hasattr(C, "__call__"):
-                return True
-        return NotImplemented
+        return True if cls is Callable and _hasattr(C, "__call__") else NotImplemented
 
 
 ### SETS ###
@@ -150,37 +139,33 @@ class Set(Sized, Iterable, Container):
     def __le__(self, other):
         if not isinstance(other, Set):
             return NotImplemented
-        if len(self) > len(other):
-            return False
-        for elem in self:
-            if elem not in other:
-                return False
-        return True
+        return False if len(self) > len(other) else all(elem in other for elem in self)
 
     def __lt__(self, other):
-        if not isinstance(other, Set):
-            return NotImplemented
-        return len(self) < len(other) and self.__le__(other)
+        return (
+            len(self) < len(other) and self.__le__(other)
+            if isinstance(other, Set)
+            else NotImplemented
+        )
 
     def __gt__(self, other):
-        if not isinstance(other, Set):
-            return NotImplemented
-        return len(self) > len(other) and self.__ge__(other)
+        return (
+            len(self) > len(other) and self.__ge__(other)
+            if isinstance(other, Set)
+            else NotImplemented
+        )
 
     def __ge__(self, other):
         if not isinstance(other, Set):
             return NotImplemented
-        if len(self) < len(other):
-            return False
-        for elem in other:
-            if elem not in self:
-                return False
-        return True
+        return False if len(self) < len(other) else all(elem in self for elem in other)
 
     def __eq__(self, other):
-        if not isinstance(other, Set):
-            return NotImplemented
-        return len(self) == len(other) and self.__le__(other)
+        return (
+            len(self) == len(other) and self.__le__(other)
+            if isinstance(other, Set)
+            else NotImplemented
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -195,18 +180,17 @@ class Set(Sized, Iterable, Container):
         return cls(it)
 
     def __and__(self, other):
-        if not isinstance(other, Iterable):
-            return NotImplemented
-        return self._from_iterable(value for value in other if value in self)
+        return (
+            self._from_iterable(value for value in other if value in self)
+            if isinstance(other, Iterable)
+            else NotImplemented
+        )
 
     __rand__ = __and__
 
     def isdisjoint(self, other):
         'Return True if two sets have a null intersection.'
-        for value in other:
-            if value in self:
-                return False
-        return True
+        return all(value not in self for value in other)
 
     def __or__(self, other):
         if not isinstance(other, Iterable):
@@ -421,9 +405,11 @@ class Mapping(Sized, Iterable, Container):
     __hash__ = None
 
     def __eq__(self, other):
-        if not isinstance(other, Mapping):
-            return NotImplemented
-        return dict(self.items()) == dict(other.items())
+        return (
+            dict(self.items()) == dict(other.items())
+            if isinstance(other, Mapping)
+            else NotImplemented
+        )
 
     def __ne__(self, other):
         return not (self == other)
@@ -443,22 +429,21 @@ class MappingView(Sized):
 class KeysView(MappingView, Set):
 
     @classmethod
-    def _from_iterable(self, it):
+    def _from_iterable(cls, it):
         return set(it)
 
     def __contains__(self, key):
         return key in self._mapping
 
     def __iter__(self):
-        for key in self._mapping:
-            yield key
+        yield from self._mapping
 
 KeysView.register(type({}.viewkeys()))
 
 class ItemsView(MappingView, Set):
 
     @classmethod
-    def _from_iterable(self, it):
+    def _from_iterable(cls, it):
         return set(it)
 
     def __contains__(self, item):
@@ -479,10 +464,7 @@ ItemsView.register(type({}.viewitems()))
 class ValuesView(MappingView):
 
     def __contains__(self, value):
-        for key in self._mapping:
-            if value == self._mapping[key]:
-                return True
-        return False
+        return any(value == self._mapping[key] for key in self._mapping)
 
     def __iter__(self):
         for key in self._mapping:
@@ -602,17 +584,13 @@ class Sequence(Sized, Iterable, Container):
         i = 0
         try:
             while True:
-                v = self[i]
-                yield v
+                yield self[i]
                 i += 1
         except IndexError:
             return
 
     def __contains__(self, value):
-        for v in self:
-            if v == value:
-                return True
-        return False
+        return any(v == value for v in self)
 
     def __reversed__(self):
         for i in reversed(range(len(self))):
@@ -629,7 +607,7 @@ class Sequence(Sized, Iterable, Container):
 
     def count(self, value):
         'S.count(value) -> integer -- return number of occurrences of value'
-        return sum(1 for v in self if v == value)
+        return sum(v == value for v in self)
 
 Sequence.register(tuple)
 Sequence.register(basestring)

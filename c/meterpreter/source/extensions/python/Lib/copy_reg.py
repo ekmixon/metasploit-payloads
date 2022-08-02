@@ -110,10 +110,7 @@ def _slotnames(cls):
 
     # Not cached -- calculate the value
     names = []
-    if not hasattr(cls, "__slots__"):
-        # This class has no slots
-        pass
-    else:
+    if hasattr(cls, "__slots__"):
         # Slots found -- gather slot names from all base classes
         for c in cls.__mro__:
             if "__slots__" in c.__dict__:
@@ -125,9 +122,8 @@ def _slotnames(cls):
                     # special descriptors
                     if name in ("__dict__", "__weakref__"):
                         continue
-                    # mangled names
                     elif name.startswith('__') and not name.endswith('__'):
-                        names.append('_%s%s' % (c.__name__, name))
+                        names.append(f'_{c.__name__}{name}')
                     else:
                         names.append(name)
 
@@ -177,8 +173,7 @@ def remove_extension(module, name, code):
     key = (module, name)
     if (_extension_registry.get(key) != code or
         _inverted_registry.get(code) != key):
-        raise ValueError("key %s is not registered with code %s" %
-                         (key, code))
+        raise ValueError(f"key {key} is not registered with code {code}")
     del _extension_registry[key]
     del _inverted_registry[code]
     if code in _extension_cache:
